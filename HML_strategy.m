@@ -351,7 +351,7 @@ for k=2:(DATA_LEN),
             
             % Calcul des intérêts perçus de l'USD à la période (t-1)
             if (k > 2)
-                lending_hisgh_usd_prev = lending_high_usd;
+                lending_high_usd_prev = lending_high_usd;
                 lending_high_foreign_prev = lending_high_usd;
                 lending_high_foreign_eop_prev = lending_high_foreign_prev * (1 + ((high_dr_prev(1,i) ./ high_base_yr))); % EOP = End of Period
                 lending_high_usd_eop_prev = lending_high_foreign_eop_prev; % EOP = End of Period
@@ -366,14 +366,14 @@ for k=2:(DATA_LEN),
             % Calcul des intérêts perçus de la currency selectionnée en t
             % à l'instant (t-1)
             if (k > 2)
-                lending_high_foreign_prev = lending_high_usd * high_fxrates_dcu_prev(1,i);
+                lending_high_foreign_prev = lending_high_usd_prev * high_fxrates_dcu_prev(1,i);
                 lending_high_foreign_eop_prev = lending_high_foreign_prev * (1 + ((high_dr_prev(1,i) ./ high_base_yr))); % EOP = End of Period
                 lending_high_usd_eop_prev = high_fxrates_fcu(1,i) * lending_high_foreign_eop_prev; % EOP = End of Period
             end
             
         end
         lending_high_interest_usd = lending_high_usd_eop - lending_high_usd;
-        lending_high_interest_usd_prev = lending_high_usd_eop_prev - lending_high_usd;
+        lending_high_interest_usd_prev = lending_high_usd_eop_prev - lending_high_usd_prev;
         fprintf('\t%6.4f $ ~ %6.4f (%s) ---> %6.4f (%s) ~ %6.4f $ (%6.4f $)\n', lending_high_usd, lending_high_foreign, current_cur{:}, lending_high_foreign_eop, current_cur{:}, lending_high_usd_eop, lending_high_interest_usd);
         total_lending_high_usd = total_lending_high_usd + lending_high_interest_usd;
         
@@ -414,7 +414,7 @@ line = length(pf_HML);
 pf_HML(1, 2) = 0;
 pf_HML(1, 5) = 0;
 for i=2:line,
-    Zt_prev = pf_HML(i, 4);
+    Zt_prev = pf_HML(i, 4)-pf_HML(i-1,4);
     Zt = pf_HML(i, 1);
     pf_HML(i, 5) = sign(Zt_prev) * Zt;
     pf_HML(i, 6) = pf_HML(i-1, 6) + pf_HML(i, 5);
@@ -583,3 +583,18 @@ title('PnL de la Stratégie HML');
 fprintf('\tMAXIMUM DROWDOWN HML:\n');
 fprintf('\t\t- HML\t\t\t\t\t\t: %6.2f %% (atteint le %s)\n', (position_mdd_HML(1,1) - mdd_m_HML(1,1))/mdd_m_HML(1,1)*100, datestr(pf_dates(mdd_date_HML(1,1)), 'dd-mmm-yyyy'));
 fprintf('\t\t- HML couverture Momentum\t: %6.2f %% (atteint le %s)\n', (position_mdd_HML(1,2) - mdd_m_HML(1,2))/mdd_m_HML(1,2)*100, datestr(pf_dates(mdd_date_HML(1,2)), 'dd-mmm-yyyy'));
+
+%back testing
+Variation_Couvert_Momentum= pf_HML(1:line,2) - [0; pf_HML(1:line-1,2)]+pf_HML(1:line,6) - [0; pf_HML(1:line-1,6)]
+Variation_Non_Couvert= pf_HML(1:line,2) - [0; pf_HML(1:line-1,2)]
+C=zeros(line-1,1)
+delta_error=0.001
+for i=3:line
+        C(i)=Variation_Couvert_Momentum(i)/Variation_Non_Couvert(i)       
+        if (abs(sign(sign(delta_error - C(i)) + sign(-delta_error - C(i)))))
+            if (abs(sign(sign(2+delta_error - C(i)) + sign(2-delta_error - C(i)))))
+            error('HML is not implemented correctly, as Variation of couvert momentum is not either 0 or the double of Variation non couvert')
+            end
+        end
+end
+        
