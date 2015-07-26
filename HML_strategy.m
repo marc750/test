@@ -77,6 +77,7 @@ index_pf_high       = my_find(list_ccy_fx, pf_cur_hml_high(1,:));
 index_dr_low        = my_find(list_ccy_dr, pf_cur_hml_low(1,:));
 index_dr_high       = my_find(list_ccy_dr, pf_cur_hml_high(1,:));
 
+
 low_fxrates_fcu_prev    = cell2mat([FCU_bid(2,index_pf_low) ; FCU_ask(2,index_pf_low)]);
 high_fxrates_fcu_prev   = cell2mat([FCU_bid(2,index_pf_high) ; FCU_ask(2,index_pf_high)]);
 low_fxrates_dcu_prev    = cell2mat([DCU_bid(2,index_pf_low) ; DCU_ask(2,index_pf_low)]);
@@ -86,7 +87,7 @@ high_dr_prev            = cell2mat([DR_bid(2, index_dr_high) ; DR_ask(2, index_d
 
 
 for k=2:(DATA_LEN),
-    %% Constitution des données
+    %% Constitution des données 
     % Récupération pour chaque période de trading des taux en vigueur
     % durant la période: taux de dépot/placement, taux de changes,
     % proprités relatives à chaque devise traitée dans le cadre des
@@ -268,17 +269,18 @@ for k=2:(DATA_LEN),
             nb_cur_pf_low = nb_cur_by_pf - 1;
         end
         
+        prev_borrowing_low_usd = 0;
+        prev_borrowing_low_foreign = 0;
+        prev_borrowing_low_foreign_eop = 0; % EOP = End of Period
+        prev_borrowing_low_usd_eop = 0; % EOP = End of Period
+        prev_borrowing_low_cost_usd = 0;
+        
         % Si le portefeuille n'est consitué que d'une seule devise et qu'il
         % s'agit du dollar US, alors le coût d'emprunt est de 0. 
         if (nb_cur_pf_low == 0)
             borrowing_low_cost_usd = 0;
             fprintf('\t0 $');
         else
-            prev_borrowing_low_usd = 0;
-            prev_borrowing_low_foreign = 0;
-            prev_borrowing_low_foreign_eop = 0;
-            prev_borrowing_low_usd_eop = 0;    
-            prev_borrowing_low_cost_usd = 0;
             
             if (strcmp(current_cur, 'USD'))
                 % Si le Dollar US est présent dans les devises faibles
@@ -290,6 +292,14 @@ for k=2:(DATA_LEN),
                 borrowing_low_foreign_eop = 0; % EOP = End of Period
                 borrowing_low_usd_eop = 0;    
                 borrowing_low_cost_usd = 0;
+                
+                        if (k > 2),
+                    prev_borrowing_low_usd = 0;
+                    prev_borrowing_low_foreign = 0;
+                    prev_borrowing_low_foreign_eop = 0; % EOP = End of Period
+                    prev_borrowing_low_usd_eop = 0; % EOP = End of Period
+                    prev_borrowing_low_cost_usd = 0;
+                        end
             else
                 % Calcul du coût d'emprunt de la currency selectionnée en t
                 % à l'instant t
@@ -387,16 +397,11 @@ for k=2:(DATA_LEN),
     fprintf('\t\t\t ==== TOTAL: %6.4f $ (Previously: %6.4f $) ====\n', total_lending_high_usd, total_lending_high_usd_prev);     
     
     % Composition du tableau de résulat de la stratégie HML
-    % 1ère colonne: Calcul du payoff du carry trade S1 vs S5 en t à
-    %               l'instant t
-    %               (intérêts perçus suite au placement sur S5 - coût 
-    %               d'emprunt de S1)
+    % 1ère colonne: Calcul du payoff du carry trade S1 vs S5 en t à l'instant t (intérêts perçus suite au placement sur S5 - coût d'emprunt de S1)             
     % 2ème colonne: somme cumulée des payoffs de la stratégie HML
     % 3ème colonne: taux de rendements de la période 
-    % 4èùe colonne: Calcul du payoff du carry trade S1 vs S5 en t à
-    %               l'instant t-1
-    %               (intérêts perçus suite au placement sur S5 - coût
-    %               d'emprunt de S1) : utile pour la stratégie HML Momentum
+    % 4ème colonne: Calcul du payoff du carry trade S1 vs S5 en t à l'instant t-1 (intérêts perçus suite au placement sur S5 - coût d'emprunt de S1) : utile pour la stratégie HML Momentum
+                 
     pf_HML(k, 1) = total_lending_high_usd - total_borrowing_low_cost_usd;
     pf_HML(k, 2) = pf_HML(k-1, 2) + pf_HML(k, 1);
     pf_HML(k, 3) = pf_HML(k, 1) / pf_HML(k-1, 2);
@@ -405,16 +410,14 @@ end
 
 
 %% Stratégie de couverture Momentum High Minus Low (HML)
-% Le tablea de résulat de la stratégie HML est complétée de 2 nouvelles
-% colonnes pour les résultats du Momentum
+% Le tablea de résulat de la stratégie HML est complétée de 2 nouvelles colonnes pour les résultats du Momentum
 % 5ème colonne: calcul du payoff de la stratégie HML Momentum
-% 6ème colonne: somme cumulée des payoffs consolidés de la stratégie HML
-%               Momentum
+% 6ème colonne: somme cumulée des payoffs consolidés de la stratégie HML Momentum
 line = length(pf_HML);
 pf_HML(1, 2) = 0;
 pf_HML(1, 5) = 0;
 for i=2:line,
-    Zt_prev = pf_HML(i, 4)-pf_HML(i-1,4);
+    Zt_prev = pf_HML(i-1, 1);
     Zt = pf_HML(i, 1);
     pf_HML(i, 5) = sign(Zt_prev) * Zt;
     pf_HML(i, 6) = pf_HML(i-1, 6) + pf_HML(i, 5);
@@ -584,16 +587,28 @@ fprintf('\tMAXIMUM DROWDOWN HML:\n');
 fprintf('\t\t- HML\t\t\t\t\t\t: %6.2f %% (atteint le %s)\n', (position_mdd_HML(1,1) - mdd_m_HML(1,1))/mdd_m_HML(1,1)*100, datestr(pf_dates(mdd_date_HML(1,1)), 'dd-mmm-yyyy'));
 fprintf('\t\t- HML couverture Momentum\t: %6.2f %% (atteint le %s)\n', (position_mdd_HML(1,2) - mdd_m_HML(1,2))/mdd_m_HML(1,2)*100, datestr(pf_dates(mdd_date_HML(1,2)), 'dd-mmm-yyyy'));
 
-%back testing
-Variation_Couvert_Momentum= pf_HML(1:line,2) - [0; pf_HML(1:line-1,2)]+pf_HML(1:line,6) - [0; pf_HML(1:line-1,6)]
-Variation_Non_Couvert= pf_HML(1:line,2) - [0; pf_HML(1:line-1,2)]
-C=zeros(line-1,1)
-delta_error=0.001
+%implementation check
+Variation_Couvert_Momentum= pf_HML(1:line,2) - [0; pf_HML(1:line-1,2)]+pf_HML(1:line,6) - [0; pf_HML(1:line-1,6)];
+Variation_Non_Couvert= pf_HML(1:line,2) - [0; pf_HML(1:line-1,2)];
+C=zeros(line-1,1);
+delta_error=0.001;
 for i=3:line
-        C(i)=Variation_Couvert_Momentum(i)/Variation_Non_Couvert(i)       
+        C(i)=Variation_Couvert_Momentum(i)/Variation_Non_Couvert(i);      
         if (abs(sign(sign(delta_error - C(i)) + sign(-delta_error - C(i)))))
             if (abs(sign(sign(2+delta_error - C(i)) + sign(2-delta_error - C(i)))))
             error('HML is not implemented correctly, as Variation of couvert momentum is not either 0 or the double of Variation non couvert')
+            end
+        end
+        if (Variation_Non_Couvert(i-1)>0)
+            
+            if (abs(sign(sign(2+delta_error - C(i)) + sign(2-delta_error - C(i)))))
+                error('HML is not implemented correctly, as Variation of couvert momentum must be the double of Variation non couvert when the period before was Variation_Non_Couvert(i-1)>0')
+            end
+        end
+        if (Variation_Non_Couvert(i-1)<0)
+            
+            if (abs(sign(sign(delta_error - C(i)) + sign(-delta_error - C(i)))))
+                error('HML is not implemented correctly, as Variation of couvert momentum is must be around 0 when the period before was Variation_Non_Couvert(i-1)<0')
             end
         end
 end
